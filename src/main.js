@@ -205,6 +205,10 @@ function handleGameEvent(event) {
       break;
     }
     case "finish": {
+      try { if (!['localhost','127.0.0.1'].includes(location.hostname)) {   // -done:玩完一局(t=本局秒數,/stats 使用次數與平均停留吃這個)
+        var __dt = Math.round((Date.now() - (window.__matchT0 || Date.now())) / 1000);
+        navigator.sendBeacon?.('https://hfpc-play-stats.summer09201017.workers.dev/api/ping?g=balaam-donkey3d-done&t=' + __dt);
+      } } catch (_) {}
       audio.horn();
       audio.vibrate([110, 50, 120]);
       // 結算引經文(曉臻唸和合本):零罰分=民22:33(驢救了主人);其餘=民22:28(驢開口)
@@ -289,6 +293,7 @@ ui.audioSelect.addEventListener("change", (event) => {
 });
 
 ui.startMatchButton.addEventListener("click", () => {
+  window.__matchT0 = Date.now();   // -done beacon 用:本局開始時間
   unlockAudio();
   audio.uiTap();
   game.applyPresentation({
