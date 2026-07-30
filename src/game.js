@@ -349,6 +349,220 @@ function makeAngel({ pose = "low" } = {}) {
   return angel;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   🧸 tsum 圓萌小驢(2026-07-30;使用者拍板的全艦隊畫風政策:**動物一律 tsum**)
+   ★ 這一隻**兩站共用**:騎驢進耶路撒冷(本站)與巴蘭騎驢(balaam-donkey3d)的 makeDonkey
+     去掉註解後**逐行相同**(實測 100/100 行),所以做一次、兩邊各自貼上=改一次改兩站。
+   ★ tsum-3d-kit 沒有現成的驢(只有獅/熊/狼/羊)⇒ 這是新做的,照那包的鐵則走:
+     **輪廓線索**=🫏 **大長耳**(而且「尖」的東西一定要用圓錐,拉長的球前端還是圓的),
+     加上白肚白鼻、短鬃、尾末一撮 —— 拿掉顏色只看剪影也要認得出是驢不是小馬。
+   ★★ 這一隻**最硬的約束是「不能往上長」**:鞍座在 y=1.42,而騎者(耶穌／巴蘭)的位置
+      是**相對鞍座**算出來的。身體一加高就會把鞍座和騎者的腿吞進背裡。
+      ⇒ 變圓只能**往下、往兩側**長,身體頂面維持 1.40。
+      (這和 2D 大衛打獅熊那次「加高身體→幾乎坐在地上」是同一條教訓的另一面:
+        圓不是靠加高,是靠改剖面比例。)
+   ★ 以下一律不動(動了就會出事):
+       · **鞍座/鞍布 y=1.42 / 1.39** → 騎者會浮空或陷進背裡;
+       · 四腿 pivot 的 x/y/z(0.95 / ±0.17 / +0.54,-0.58)與 upperLen/lowerLen → 蹄會離地或穿地;
+       · `neckPivot` 的位置(0,1.35,0.8)與 head 的位置(0,0.44,0.36) → 點頭動畫吃它;
+       · `tail.rotation.x = 0.55` → 甩尾動畫寫的是 `0.55 + sin(...)`,基準改了尾巴會歪掉;
+       · 回傳的 { group, rig, body, neckPivot, head, tail, legs, saddle, coatMat, maneMat } 接口;
+       · **coatMat / maneMat 必須是真的貼在身上的那兩個材質** → setHorseCoat 換毛色靠改它們的 color。
+   ★ 視角事實(影響取捨):預設鏡頭在**驢的後方**(`p - t*8.6`)⇒ 玩家最常看到的是
+     **臀部、尾巴、豎起的大長耳**。所以背面剪影優先做圓;臉(大眼/腮紅/笑嘴)在選單繞場
+     與側視角才看得到,但仍照 tsum 標準做齊。
+   ★ 沒有加眨眼/Q 彈呼吸:這隻是**騎乘用**,遊戲自己每幀在寫 `rig.position.y`(顛動)與
+     `neckPivot.rotation.x`(點頭)—— tsum-3d-kit 鐵則④說 Q 彈只能動 scale、不可佔用那兩個,
+     而這站沒有可掛的待機迴圈,硬加會和顛動打架。牠一直在動,不缺生氣。
+   ★ TSUM_MOUNT=false 一鍵回到寫實版;寫實 makeDonkey **刻意保留不刪**(日後接年齡分級用)。
+   ══════════════════════════════════════════════════════════════════════════════ */
+const TSUM_MOUNT = true;
+
+// 壓扁/拉長的球:tsum 造型的主要積木
+function tblob(r, mat, sx = 1, sy = 1, sz = 1, seg = 14) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, seg, seg), mat);
+  m.scale.set(sx, sy, sz);
+  return m;
+}
+
+/* 🧸 圓萌臉,做在 **+z**(本站的驢頭朝 +z)。
+   ★ 眼睛保留「白+瞳」兩層(臉部鐵則);白色高光另外標記,將來若加黑化模式才不會被一起染色。 */
+function tsumFacePlusZ(parent, o) {
+  const R = o.r, front = R * 0.9, eyeR = R * o.eye;
+  const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const darkMat = new THREE.MeshBasicMaterial({ color: o.pupil ?? 0x1c1712 });
+  for (const sx of [-1, 1]) {
+    const white = new THREE.Mesh(new THREE.SphereGeometry(eyeR, 12, 12), whiteMat);
+    white.position.set(sx * R * o.eyeGap, R * 0.12, front * 0.62);
+    parent.add(white);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.7, 10, 10), darkMat);
+    pupil.position.set(sx * R * o.eyeGap, R * 0.12, front * 0.62 + eyeR * 0.42);
+    parent.add(pupil);
+    const hi = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.3, 8, 8), whiteMat);   // 水潤高光①
+    hi.position.set(sx * (R * o.eyeGap + eyeR * 0.28), R * 0.12 + eyeR * 0.4, front * 0.62 + eyeR * 0.62);
+    hi.userData.tsumHilite = true;
+    parent.add(hi);
+    const hi2 = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.15, 6, 6), whiteMat);  // 水潤高光②
+    hi2.position.set(sx * (R * o.eyeGap - eyeR * 0.3), R * 0.12 - eyeR * 0.42, front * 0.62 + eyeR * 0.6);
+    hi2.userData.tsumHilite = true;
+    parent.add(hi2);
+    if (o.blush) {                                                                     // 腮紅
+      const bl = tblob(R * 0.16, new THREE.MeshStandardMaterial({ color: o.blush, roughness: 0.9 }), 1, 0.7, 0.45, 8);
+      bl.position.set(sx * R * (o.eyeGap + 0.36), -R * 0.1, front * 0.5);
+      parent.add(bl);
+    }
+  }
+  return parent;
+}
+
+/* 🧸 圓萌小驢(tsum)。骨架、鞍高、腿的關節與回傳接口全部照寫實版,只換積木形狀。 */
+function makeDonkeyTsum({ coat = 0x8a7f72, mane = 0x4a4038 } = {}) {
+  const group = new THREE.Group();                 // 原點=地面、+z 朝前
+  const coatMat = new THREE.MeshStandardMaterial({ color: coat, roughness: 0.72 });
+  const maneMat = new THREE.MeshStandardMaterial({ color: mane, roughness: 0.85 });
+  // ★ 材質共用:setHorseCoat 只改這兩個的 color,全身(含頸/頭/腿)一起換 —— 別另開材質
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xe9e2d2, roughness: 0.8 });  // 白肚白鼻(驢特徵)
+  const hoofMat = new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 0.6 });
+
+  const rig = new THREE.Group();
+  group.add(rig);
+
+  /* 圓團身體。★ 頂面**必須**維持 1.40(鞍座 1.42 就坐在上面):
+     半徑 0.44、y 縮到 0.68 ⇒ 半高 0.30、中心壓低到 1.10 ⇒ 頂 1.40 ✓、底 0.80。
+     剖面 0.29(寬)×0.30(高)= 圓的;長 ±0.625 ≈ 寫實版的 ±0.65(不改變被騎的量感)。*/
+  const body = tblob(0.44, coatMat, 0.66, 0.68, 1.42);
+  body.position.set(0, 1.10, 0);
+  rig.add(body);
+  const chestCap = tblob(0.30, coatMat, 0.9, 0.9, 0.8);
+  chestCap.position.set(0, 1.14, 0.66);
+  rig.add(chestCap);
+  const rump = tblob(0.33, coatMat, 0.92, 0.92, 0.86);   // ★ 後方視角最常看到牠 → 做圓一點
+  rump.position.set(0, 1.10, -0.70);
+  rig.add(rump);
+  const belly = tblob(0.30, whiteMat, 0.8, 0.62, 1.2);   // 白肚(驢特徵)
+  belly.position.set(0, 0.92, 0);
+  rig.add(belly);
+
+  // 頸(斜上)+頭 —— neckPivot / head 的位置與寫實版一字不差(點頭動畫吃它)
+  const neckPivot = new THREE.Group();
+  neckPivot.position.set(0, 1.35, 0.8);
+  rig.add(neckPivot);
+  /* 頸:**短而粗**。⚠ 第一版做 0.17 粗、y 拉長 1.7 → 截圖一看是**羊駝不是驢**
+     (細長頸+圓身=駱駝科的剪影)。驢的頸子短、和身體幾乎連成一塊。*/
+  const neck = tblob(0.20, coatMat, 1, 1.32, 1);
+  neck.rotation.x = 0.7;
+  neck.position.set(0, 0.16, 0.12);
+  neckPivot.add(neck);
+  const head = new THREE.Group();
+  head.position.set(0, 0.44, 0.36);
+  neckPivot.add(head);
+  const HR = 0.27;                                  // tsum:頭做大(寫實版 skull 只有半寬 0.11)
+  const skull = tblob(HR, coatMat, 1, 0.98, 1.06);
+  skull.rotation.x = 0.2;
+  head.add(skull);
+  const muzzle = tblob(HR * 0.6, whiteMat, 1, 0.82, 1.15, 12);   // 白鼻(驢特徵)
+  muzzle.position.set(0, -HR * 0.46, HR * 0.86);
+  head.add(muzzle);
+  const nostrilMat = new THREE.MeshBasicMaterial({ color: 0x3a332c });
+  for (const sx of [-1, 1]) {
+    const n = tblob(HR * 0.07, nostrilMat, 1, 1.2, 1, 6);
+    n.position.set(sx * HR * 0.18, -HR * 0.44, HR * 1.4);
+    head.add(n);
+  }
+  tsumFacePlusZ(head, { r: HR, eye: 0.33, eyeGap: 0.4, blush: 0xdf9a92, pupil: 0x1c1712 });
+  // 深笑(半圈甜甜圈,開口朝下=笑);貼在白鼻表面外一點,別埋進去
+  const smile = new THREE.Mesh(
+    new THREE.TorusGeometry(HR * 0.17, HR * 0.04, 6, 14, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x6b5a4a, roughness: 0.9 }),
+  );
+  smile.position.set(0, -HR * 0.62, HR * 1.24);
+  smile.rotation.z = Math.PI;
+  head.add(smile);
+  /* 🫏 **大長耳=驢的身分證**(tsum 化最容易漏的「一眼認得的輪廓線索」)。
+     比寫實版再放大一號(0.06/0.34 → 0.078/0.44):後方視角看不到臉,
+     一對豎在圓頭上的長耳朵就是唯一能讓人認出「這是驢」的東西。
+     ★ 一定要用圓錐(rTop≈0)—— 拉長的球前端還是圓的,做不出尖耳(狼那次被退件的主因)。*/
+  /* 🫏 大長耳=驢的身分證。放大到 0.082×0.46、推到 ±0.19(仍在頭的半寬 0.27 之內=還長在頭上)、
+     往外撇 -0.5 ⇒ 側視/俯視/選單繞場都很搶眼。
+     ⚠ **實測結論(別再為這件事調數字)**:預設鏡頭在驢的**正後方**,騎者比驢頭更靠近鏡頭,
+       角張得更大 ⇒ **耳朵從正後方一定看不到**,除非把耳朵做得比頭還寬(那就變形了)。
+       我試過從 ±0.135 推到 ±0.19,背面依舊被騎者完全遮住 —— 這是這個鏡頭+騎者配置的**幾何必然**,
+       寫實版本來也一樣。背面能讀到的是**圓臀 + 尾末一撮**,那兩處已經做圓做足;
+       想看整隻驢,遊戲本來就有側視(view 1)、俯視(view 2)與選單繞場。 */
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.082, 0.46, 8), coatMat);
+    ear.position.set(side * 0.19, 0.34, -0.05);
+    ear.rotation.z = side * -0.5;                   // 往外撇(比寫實版再撇一點,背面才露得出來)
+    ear.rotation.x = -0.15;
+    head.add(ear);
+    const earInner = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.28, 6), whiteMat);
+    earInner.position.set(side * 0.198, 0.33, -0.015);
+    earInner.rotation.z = side * -0.5;
+    earInner.rotation.x = -0.15;
+    head.add(earInner);
+  }
+  /* 短鬃(驢的鬃毛短短一排立著,不像馬那樣長披)→ tsum 版用一排小毛球。
+     ⚠ 第一版把毛球直接掛在 neckPivot 上、座標自己算 → 頸子是**斜的**(rotation.x=0.7),
+       毛球卻沿著垂直方向排 ⇒ 兩條線發散,截圖看到的是「一串珠子飄在頸子旁邊」。
+     正解=開一個**和頸子同一個旋轉**的 Group,毛球沿它的 local +y 排,就一定貼著頸背。
+     (同一條坑:配件座標要跟著它依附的部位算,不能自己另起一套。) */
+  const maneRail = new THREE.Group();
+  maneRail.position.copy(neck.position);
+  maneRail.rotation.x = neck.rotation.x;
+  neckPivot.add(maneRail);
+  for (let i = 0; i < 5; i += 1) {
+    const f = i / 4;
+    const tuft = tblob(0.058 - f * 0.008, maneMat, 1, 1.15, 1, 8);
+    tuft.position.set(0, -0.2 + f * 0.5, -0.16);     // 沿頸的軸線排、往頸背(-z)貼
+    maneRail.add(tuft);
+  }
+  const forelock = tblob(0.07, maneMat, 1.1, 0.9, 0.8, 8);
+  forelock.position.set(0, HR * 0.9, HR * 0.1);
+  head.add(forelock);
+
+  /* 細尾+末端一撮(驢特徵)。★ rotation.x = 0.55 是**動畫基準**,不可改
+     (甩尾寫的是 `0.55 + sin(...)`)。tsum 版把細桿換成兩顆球+一撮蓬毛。*/
+  const tail = new THREE.Group();
+  tail.position.set(0, 1.12, -0.92);
+  tail.rotation.x = 0.55;
+  [0.30, 0.62].forEach((f, i) => {
+    const b = tblob(0.052 - i * 0.006, coatMat, 1, 1, 1, 8);
+    b.position.y = -0.42 * f;
+    tail.add(b);
+  });
+  const tailTuft = tblob(0.105, maneMat, 1, 1.25, 1, 10);   // 尾末一撮(驢特徵)
+  tailTuft.position.y = -0.44;
+  tail.add(tailTuft);
+  rig.add(tail);
+
+  /* 四腿:**關節結構、長度、pivot 位置全部與寫實版一字不差**(奔跑循環與蹄貼地靠它),
+     只把膠囊加粗成 tsum 的短胖腿。蹄(方塊)刻意保留 —— 驢有蹄,換成肉球就不是驢了。*/
+  const mkLeg = (x, z) => {
+    const leg = createLimb({
+      upperMaterial: coatMat,
+      lowerMaterial: coatMat,
+      endMaterial: hoofMat,
+      upperLen: 0.42, lowerLen: 0.4,
+      upperRadius: 0.088, lowerRadius: 0.072,   // 寫實版 0.065 / 0.05
+      end: "foot",
+    });
+    leg.pivot.position.set(x, 0.95, z);
+    rig.add(leg.pivot);
+    return leg;
+  };
+  const legs = [mkLeg(-0.17, 0.54), mkLeg(0.17, 0.54), mkLeg(-0.17, -0.58), mkLeg(0.17, -0.58)];
+
+  // 鞍=巴蘭自己備上驢的鞍布(民22:21)★ y 一律不動:騎者的位置是相對它算的
+  const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.05, 0.66), new THREE.MeshStandardMaterial({ color: 0x8a3b28, roughness: 0.9 }));
+  saddle.position.set(0, 1.42, 0.05);
+  rig.add(saddle);
+  const cloth2 = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.04, 0.56), new THREE.MeshStandardMaterial({ color: 0xb06a3c, roughness: 0.9 }));
+  cloth2.position.set(0, 1.39, 0.05);
+  rig.add(cloth2);
+
+  return { group, rig, body, neckPivot, head, tail, legs, saddle, coatMat, maneMat };
+}
+
 // ---------- 小驢駒(矩形身體鐵則的四足版,整體比馬小;介面與馬相同) ----------
 // 驢特徵:大長耳往外撇、灰褐毛、白肚白鼻、短鬃、細尾末端一撮。
 function makeDonkey({ coat = 0x8a7f72, mane = 0x4a4038 } = {}) {
@@ -625,7 +839,10 @@ export class BalaamDonkeyGame {
 
     // 驢+騎在背上的巴蘭(玩家操控驢;巴蘭是引擎控 NPC——他看不見天使);毛色照設定
     const coat = HORSE_COATS[this.coatId] || HORSE_COATS.greybrown;
-    this.horse = makeDonkey({ coat: coat.coat, mane: coat.mane });
+    /* 🧸 動物一律 tsum(0730 使用者拍板的全艦隊畫風政策)。
+       這隻驢與 donkey-jerusalem3d **共用同一份程式碼**(兩站的 makeDonkey 去註解後逐行相同),
+       所以造型改一次、兩站一起換。TSUM_MOUNT=false 回寫實;寫實版刻意保留不刪。 */
+    this.horse = (TSUM_MOUNT ? makeDonkeyTsum : makeDonkey)({ coat: coat.coat, mane: coat.mane });
     this.scene.add(this.horse.group);
     this.rider = makeBalaamRider();
     poseBalaamOnDonkey(this.rider);
