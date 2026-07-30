@@ -45,6 +45,7 @@ const ui = {
   modeDescription: document.querySelector("#modeDescription"),
   menuDifficultySelect: document.querySelector("#menuDifficultySelect"),
   horseCoatSelect: document.querySelector("#horseCoatSelect"),
+  riderStyleSelect: document.querySelector("#riderStyleSelect"),
   audioSelect: document.querySelector("#audioSelect"),
   modeMetaTitle: document.querySelector("#modeMetaTitle"),
   modeMetaGoal: document.querySelector("#modeMetaGoal"),
@@ -67,6 +68,7 @@ window.__game = game; // /smoke3d 通用鉤子
 let selectedModeId = game.modeId;
 let selectedDifficulty = game.difficulty;
 let selectedCoat = game.coatId;
+let selectedRiderStyle = game.riderStyle;   // auto / tsum / real(auto=依年齡分級)
 let audioEnabled = settings.audioEnabled !== false;
 
 function persistSettings() {
@@ -74,6 +76,7 @@ function persistSettings() {
     difficulty: selectedDifficulty,
     modeId: selectedModeId,
     horseCoat: selectedCoat,
+    riderStyle: selectedRiderStyle,
     audioEnabled,
   });
 }
@@ -105,6 +108,7 @@ function syncMenuCards() {
 function syncMenuControls() {
   ui.menuDifficultySelect.value = selectedDifficulty;
   ui.horseCoatSelect.value = selectedCoat;
+  ui.riderStyleSelect.value = selectedRiderStyle;
   syncMenuCards();
 }
 
@@ -112,6 +116,7 @@ function syncGameConfigurationToMenu() {
   selectedModeId = game.modeId;
   selectedDifficulty = game.difficulty;
   selectedCoat = game.coatId;
+  selectedRiderStyle = game.riderStyle;
   syncMenuControls();
 }
 
@@ -284,6 +289,22 @@ ui.horseCoatSelect.addEventListener("change", (event) => {
   selectedCoat = event.target.value;
   game.setHorseCoat(selectedCoat); // 立即換色(選單背景就看得到)
   persistSettings();
+});
+
+/* 🧸 巴蘭的樣子(auto 依年齡 / 圓萌 / 原本的樣子);立刻重建 → 選單背景就看得到差別。*/
+ui.riderStyleSelect.addEventListener("change", (event) => {
+  unlockAudio();
+  audio.uiTap();
+  selectedRiderStyle = event.target.value;
+  game.setRiderStyle(selectedRiderStyle);
+  persistSettings();
+});
+
+/* ★ 難度也要重建騎者:選 auto 時畫風是**難度**決定的。*/
+ui.menuDifficultySelect.addEventListener("change", () => {
+  game.riderStyle = selectedRiderStyle;
+  game.difficulty = selectedDifficulty;
+  game.rebuildRider();
 });
 
 ui.audioSelect.addEventListener("change", (event) => {

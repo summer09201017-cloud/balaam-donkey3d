@@ -1,6 +1,7 @@
 // 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
+// nf7(2026-07-30):🧸 騎者也做了圓萌版 + 年齡分級三態(auto 依年齡/圓萌/原本的樣子)
 // nf6(2026-07-30):🧸 驢改成 tsum 圓萌造型(全艦隊政策「動物一律 tsum」;與 donkey-jerusalem3d 共用同一隻驢)
-const CACHE_NAME = "balaam-donkey3d-nf6"; // nf1:巴蘭騎驢首發(fork 自 donkey-jerusalem3d)
+const CACHE_NAME = "balaam-donkey3d-nf7"; // nf1:巴蘭騎驢首發(fork 自 donkey-jerusalem3d)
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
