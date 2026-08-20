@@ -1,7 +1,7 @@
 // 網路優先 HTML+快取優先資產(07-13 修復:cache-first 舊 index 會在部署後 404 壞站)
 // nf7(2026-07-30):🧸 騎者也做了圓萌版 + 年齡分級三態(auto 依年齡/圓萌/原本的樣子)
 // nf6(2026-07-30):🧸 驢改成 tsum 圓萌造型(全艦隊政策「動物一律 tsum」;與 donkey-jerusalem3d 共用同一隻驢)
-const CACHE_NAME = "balaam-donkey3d-nf8"; // nf1:巴蘭騎驢首發(fork 自 donkey-jerusalem3d)
+const CACHE_NAME = "balaam-donkey3d-nf9"; // nf1:巴蘭騎驢首發(fork 自 donkey-jerusalem3d)
 const CORE_ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
@@ -64,4 +64,9 @@ self.addEventListener("fetch", (event) => {
       }).catch(() => caches.match("/"));
     }),
   );
+});
+
+// 🏷️ 版號回報(0820 全艦隊批次):頁尾徽章問「實際執行中的版本」,答案=本 SW 的快取名。
+self.addEventListener('message', function (e) {
+  if (e && e.data === 'GET_VERSION' && e.source) e.source.postMessage({ type: 'SW_VERSION', v: CACHE_NAME });
 });
